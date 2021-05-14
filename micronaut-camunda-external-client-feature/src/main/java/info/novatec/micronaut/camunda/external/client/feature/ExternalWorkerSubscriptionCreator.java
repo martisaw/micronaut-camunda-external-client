@@ -21,9 +21,16 @@ import io.micronaut.core.annotation.AnnotationValue;
 import io.micronaut.inject.BeanDefinition;
 import org.camunda.bpm.client.ExternalTaskClient;
 import org.camunda.bpm.client.task.ExternalTaskHandler;
+import org.camunda.bpm.client.topic.TopicSubscription;
 import org.camunda.bpm.client.topic.TopicSubscriptionBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
+import static java.util.Collections.*;
 
 /**
  * @author Martin Sawilla
@@ -38,11 +45,19 @@ public class ExternalWorkerSubscriptionCreator {
 
     protected final BeanContext beanContext;
     protected final ExternalTaskClient externalTaskClient;
+    protected final Configuration configuration;
+    protected List<TaskSubscription> subscriptions = emptyList();
 
     public ExternalWorkerSubscriptionCreator(BeanContext beanContext,
-                                             ExternalTaskClient externalTaskClient) {
+                                             ExternalTaskClient externalTaskClient,
+                                             Configuration configuration) {
         this.beanContext = beanContext;
         this.externalTaskClient = externalTaskClient;
+        this.configuration = configuration;
+
+        if (configuration.getSubscriptions().isPresent()) {
+            this.subscriptions = configuration.getSubscriptions().get();
+        }
 
         beanContext.getBeanDefinitions(ExternalTaskHandler.class).forEach(this::registerExternalTaskHandler);
     }
@@ -52,13 +67,27 @@ public class ExternalWorkerSubscriptionCreator {
         AnnotationValue<ExternalTaskSubscription> annotationValue = beanDefinition.getAnnotation(ExternalTaskSubscription.class);
 
         if (annotationValue != null) {
-            buildTopicSubscription(externalTaskHandler, externalTaskClient, annotationValue);
+
+            TopicSubscriptionBuilder builder = createTopicSubscription(externalTaskHandler, externalTaskClient, annotationValue);
+
+            subscriptions.forEach(
+                    it -> {
+                        if(it.getTopicName().equals(annotationValue.stringValue("topicName").get())) {
+                            overwriteTopicSubscription(builder, it);
+                        }
+                    }
+            );
+
+            TopicSubscription topicSubscription = builder.open();
+
+            log.info("External task client subscribed to topic '{}'", topicSubscription.getTopicName());
+
         } else {
             log.warn("Skipping subscription. Could not find Annotation ExternalTaskSubscription on class {}", beanDefinition.getName());
         }
     }
 
-    protected void buildTopicSubscription(ExternalTaskHandler externalTaskHandler, ExternalTaskClient client, AnnotationValue<ExternalTaskSubscription> annotationValue) {
+    protected TopicSubscriptionBuilder createTopicSubscription(ExternalTaskHandler externalTaskHandler, ExternalTaskClient client, AnnotationValue<ExternalTaskSubscription> annotationValue) {
 
         //noinspection OptionalGetWithoutIsPresent
         TopicSubscriptionBuilder builder = client.subscribe(annotationValue.stringValue("topicName").get());
@@ -109,10 +138,58 @@ public class ExternalWorkerSubscriptionCreator {
 
         annotationValue.booleanValue("includeExtensionProperties").ifPresent(builder::includeExtensionProperties);
 
-        builder.open();
+        return builder;
 
-        //noinspection OptionalGetWithoutIsPresent
-        log.info("External task client subscribed to topic '{}'", annotationValue.stringValue("topicName").get());
+    }
 
+    protected void overwriteTopicSubscription(TopicSubscriptionBuilder builder, TaskSubscription taskSubscription) {
+
+        if(taskSubscription.getLockDuration() != null) {
+            builder.lockDuration(taskSubscription.getLockDuration());
+        }
+
+        if(taskSubscription.getVariables() != null) {
+            builder.variables(taskSubscription.getVariables());
+        }
+
+        if(taskSubscription.getLocalVariables() != null) {
+            builder.localVariables(taskSubscription.getLocalVariables());
+        }
+
+        if(taskSubscription.getBusinessKey() != null) {
+            builder.businessKey(taskSubscription.getBusinessKey());
+        }
+
+        if(taskSubscription.getProcessDefinitionId() != null) {
+            builder.processDefinitionId(taskSubscription.getProcessDefinitionId());
+        }
+
+        if(taskSubscription.getProcessDefinitionIdIn() != null) {
+            builder.processDefinitionIdIn(taskSubscription.getProcessDefinitionIdIn());
+        }
+
+        if(taskSubscription.getProcessDefinitionKey() != null) {
+            builder.processDefinitionKey(taskSubscription.getProcessDefinitionKey());
+        }
+
+        if(taskSubscription.getProcessDefinitionKeyIn() != null) {
+            builder.processDefinitionKeyIn(taskSubscription.getProcessDefinitionKeyIn());
+        }
+
+        if(taskSubscription.getProcessDefinitionVersionTag() != null) {
+            builder.processDefinitionVersionTag(taskSubscription.getProcessDefinitionVersionTag());
+        }
+
+        if(taskSubscription.getWithoutTenantId() != null && taskSubscription.getWithoutTenantId()) {
+            builder.withoutTenantId();
+        }
+
+        if(taskSubscription.getTenantIdIn() != null) {
+            builder.tenantIdIn(taskSubscription.getTenantIdIn());
+        }
+
+        if(taskSubscription.getIncludeExtensionProperties() != null) {
+            builder.includeExtensionProperties(taskSubscription.getIncludeExtensionProperties());
+        }
     }
 }

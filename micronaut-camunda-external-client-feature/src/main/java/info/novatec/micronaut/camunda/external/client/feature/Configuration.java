@@ -18,6 +18,7 @@ package info.novatec.micronaut.camunda.external.client.feature;
 import io.micronaut.context.annotation.ConfigurationProperties;
 import io.micronaut.context.annotation.Context;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -112,4 +113,11 @@ public interface Configuration {
      * @return if the backoff strategy should be disabled
      */
     Optional<Boolean> getDisableBackoffStrategy();
+
+    /**
+     * A list of topic subscriptions. Allows to overwrite already set values.
+     * @return
+     */
+    Optional<List<TaskSubscription>> getSubscriptions();
+
 }

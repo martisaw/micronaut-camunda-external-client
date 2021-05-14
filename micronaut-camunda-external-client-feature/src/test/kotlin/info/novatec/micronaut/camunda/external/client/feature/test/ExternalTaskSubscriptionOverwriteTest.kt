@@ -15,8 +15,9 @@
  */
 package info.novatec.micronaut.camunda.external.client.feature.test
 
+import info.novatec.micronaut.camunda.external.client.feature.Configuration
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
-import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.*
 import org.camunda.bpm.client.ExternalTaskClient
 import org.camunda.bpm.client.impl.ExternalTaskClientImpl
 import org.junit.jupiter.api.Test
@@ -25,25 +26,34 @@ import javax.inject.Inject
 /**
  * @author Martin Sawilla
  */
-@MicronautTest
-class ExternalTaskSubscriptionTest {
+@MicronautTest(propertySources = ["classpath:overwrite.yml"])
+class ExternalTaskSubscriptionOverwriteTest {
 
+    @Inject
+    lateinit var configuration: Configuration
     @Inject
     lateinit var externalTaskClient: ExternalTaskClient
 
     @Test
-    fun `test topic subscription`() {
+    fun `test that all values are set in configuration`() {
+        val subscription = configuration.subscriptions.get()
+        assertThat(subscription.size).isEqualTo(2)
+        assertThat(subscription[0].topicName).isEqualTo("test-configuration")
+        assertThat(subscription[0].lockDuration).isEqualTo(2000)
+        assertThat(subscription[0].variables).containsExactly("two", "three")
+        assertThat(subscription[0].localVariables).isFalse
+        assertThat(subscription[0].businessKey).isEqualTo(null)
+    }
+
+    @Test
+    fun `test that properties got set`() {
         val client = externalTaskClient as ExternalTaskClientImpl
         val subscriptions = client.topicSubscriptionManager.subscriptions
 
         assertThat(subscriptions.size).isEqualTo(2)
-        subscriptions.forEach {
-                if (it.topicName == "test-annotation") {
-                    assertThat(it.topicName).isEqualTo("test-annotation")
-                    assertThat(it.lockDuration).isEqualTo(19000)
-                    assertThat(it.variableNames).containsExactly("test-one", "test-two")
-                    assertThat(it.isLocalVariables).isTrue
-                }
-        }
+        assertThat(subscriptions[0].topicName).isEqualTo("test-configuration")
+        assertThat(subscriptions[0].lockDuration).isEqualTo(2000)
+        assertThat(subscriptions[0].variableNames).containsExactly("two", "three")
+        assertThat(subscriptions[0].isLocalVariables).isFalse
     }
 }
